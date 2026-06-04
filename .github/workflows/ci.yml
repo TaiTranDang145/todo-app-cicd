@@ -77,7 +77,7 @@ jobs:
           push: true
           # Truyền API URL động trỏ đến IP máy chủ Production cổng 8000
           build-args: |
-            VITE_API_URL=http://${{ secrets.HOST }}:8000
+            VITE_API_URL=http://${{ secrets.HOST }}:3895
           # Đặt tên tag là Commit SHA độc bản, không dùng tag latest
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/todo-frontend:${{ github.sha }}

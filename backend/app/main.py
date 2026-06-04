@@ -10,11 +10,10 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Todo Application API")
 
-# Cấu hình CORS để cho phép React Frontend giao tiếp từ cổng khác
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
