@@ -42,14 +42,17 @@ jobs:
           target: "/home/${{ secrets.USERNAME }}/test"
           strip_components: 0
 
-      # Bước 4: Thực thi kéo image mới và khởi động lại các Container trên VPS
+      # Bước 4: Thực thi đăng nhập GHCR, kéo image mới và khởi động lại các Container trên VPS
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           port: 22
+          envs: GITHUB_TOKEN,GITHUB_REPOSITORY_OWNER
           script: |
             cd /home/${{ secrets.USERNAME }}/test
 
@@ -57,16 +60,25 @@ jobs:
             export COMMIT_SHA=${{ github.event.workflow_run.head_sha }}
             echo "Bắt đầu cập nhật hệ thống sang phiên bản: $COMMIT_SHA"
 
+            # Đăng nhập vào GitHub Container Registry trên VPS để pull các private images
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u $GITHUB_REPOSITORY_OWNER --password-stdin
+
             # Tạo/Cập nhật file .env để docker-compose.yml đọc các biến môi trường
             echo "TAG=$COMMIT_SHA" > .env
             echo "VITE_API_URL=http://${{ secrets.HOST }}:8005" >> .env
-            echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
+            
+            # Chuyển tên tài khoản GitHub (owner) sang dạng viết thường để khớp với Docker Image
+            REPO_OWNER_LC=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+            echo "DOCKER_USERNAME=ghcr.io/$REPO_OWNER_LC" >> .env
 
             # Kéo các Docker Images có tag Commit SHA tương ứng về máy chủ VPS
             docker compose pull
 
             # Cập nhật và khởi động lại các Container dưới dạng background mode
             docker compose up -d --remove-orphans
+
+            # Đăng xuất để xóa token phiên đăng nhập tạm thời trên VPS
+            docker logout ghcr.io
 
             # Dọn dẹp dung lượng đĩa cứng máy chủ
             docker image prune -f
