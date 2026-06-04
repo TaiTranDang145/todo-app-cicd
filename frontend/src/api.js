@@ -1,7 +1,23 @@
 import axios from 'axios';
 
-// Định nghĩa URL gốc của API Backend
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Tự động nhận diện IP/Domain của máy chủ để gọi API chính xác
+const getApiUrl = () => {
+  if (import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes('localhost')) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // Nếu là môi trường chạy local
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:3895';
+    }
+    // Nếu chạy trên VPS, tự động gọi API tới IP VPS ở cổng 3895
+    return `http://${hostname}:3895`;
+  }
+  return 'http://localhost:3895';
+};
+
+const API_URL = getApiUrl();
 
 const api = axios.create({
   baseURL: API_URL,
