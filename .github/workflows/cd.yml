@@ -1,0 +1,53 @@
+name: CD
+
+# Kích hoạt tự động sau khi workflow CI hoàn thành
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    name: Deploy to Production VPS via SSH
+    runs-on: ubuntu-latest
+    # Chỉ deploy nếu kết quả của CI workflow trước đó thành công
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      # Sử dụng SSH Action để thực thi lệnh từ xa trên VPS Ubuntu
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          # Kịch bản triển khai ứng dụng trên máy chủ VPS
+          script: |
+            # 1. Di chuyển vào thư mục dự án trên VPS
+            cd /app
+
+            # 2. Lấy Commit SHA từ workflow CI vừa hoàn tất thành công
+            export COMMIT_SHA=${{ github.event.workflow_run.head_sha }}
+            echo "Bắt đầu cập nhật hệ thống sang phiên bản: $COMMIT_SHA"
+
+            # 3. Tạo/Cập nhật file .env để docker-compose.yml đọc các biến môi trường
+            echo "TAG=$COMMIT_SHA" > .env
+            echo "VITE_API_URL=http://${{ secrets.HOST }}:8000" >> .env
+            echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
+
+            # 4. Kéo các Docker Images có tag Commit SHA tương ứng về máy chủ VPS
+            echo "Đang kéo các Docker images mới từ Docker Hub..."
+            docker compose pull
+
+            # 5. Cập nhật và khởi động lại các Container dưới dạng background mode
+            # --remove-orphans tự động dọn dẹp các service cũ bị gỡ bỏ
+            echo "Đang khởi chạy dịch vụ..."
+            docker compose up -d --remove-orphans
+
+            # 6. Dọn dẹp hệ thống: xóa các Docker image cũ không còn container nào trỏ tới
+            echo "Đang dọn dẹp dung lượng đĩa cứng máy chủ..."
+            docker image prune -f
+
+            echo "Triển khai CD thành công!"

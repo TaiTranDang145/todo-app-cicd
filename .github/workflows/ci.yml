@@ -1,0 +1,83 @@
+name: CI
+
+# Workflow được kích hoạt khi push code hoặc mở PR vào nhánh main
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # Job 1: Chạy bộ kiểm thử tự động (Unit Tests)
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      # Bước 1: Kéo mã nguồn từ repo GitHub về máy ảo của Runner
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # Bước 2: Thiết lập môi trường Python 3.10
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip' # Tự động cache các thư viện pip để giảm thời gian cài đặt ở các lần chạy sau
+
+      # Bước 3: Cài đặt các thư viện cần thiết cho FastAPI backend và cho bộ test pytest
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest httpx
+
+      # Bước 4: Khởi chạy pytest để kiểm tra độ chính xác của API
+      - name: Run Unit Test
+        run: |
+          pytest backend/
+
+  # Job 2: Biên dịch các Docker images và đẩy lên Docker Hub
+  build-and-push:
+    name: Build & Push Docker Images
+    needs: test # Job này chỉ chạy khi Job 'test' trước đó kết thúc thành công
+    runs-on: ubuntu-latest
+    # Điều kiện bảo vệ: Chỉ build và push khi sự kiện là PUSH code trực tiếp lên nhánh MAIN
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      # Bước 1: Kéo mã nguồn từ GitHub về Runner
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # Bước 2: Đăng nhập vào tài khoản Docker Hub sử dụng Secrets bảo mật
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # Bước 3: Build và đẩy Docker Image của Backend lên Docker Hub
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          # Đặt tên tag là Commit SHA độc bản, không dùng tag latest
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/todo-backend:${{ github.sha }}
+
+      # Bước 4: Build và đẩy Docker Image của Frontend lên Docker Hub
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          # Truyền API URL động trỏ đến IP máy chủ Production cổng 8000
+          build-args: |
+            VITE_API_URL=http://${{ secrets.HOST }}:8000
+          # Đặt tên tag là Commit SHA độc bản, không dùng tag latest
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/todo-frontend:${{ github.sha }}

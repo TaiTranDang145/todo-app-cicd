@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+venv/
+.venv/
+env/
+ENV/
+*.db
+backend/app/todo.db
+todo.db
+
+# Node.js (Frontend)
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env.production
+.eslintcache
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+*.log

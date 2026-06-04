@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # Service Backend (FastAPI Python + SQLite)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # Sử dụng tag git commit SHA động thông qua biến TAG, mặc định là latest
+    image: ${DOCKER_USERNAME:-mydockerhub}/todo-backend:${TAG:-latest}
+    ports:
+      - "8000:8000"
+    restart: always
+    volumes:
+      # Mount volume để lưu trữ SQLite database file todo.db không bị mất khi restart container
+      - sqlite_data:/app
+    environment:
+      - ENV=production
+
+  # Service Frontend (React + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Truyền API URL động dưới dạng biến build-args
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+    image: ${DOCKER_USERNAME:-mydockerhub}/todo-frontend:${TAG:-latest}
+    ports:
+      # Expose cổng 3001 ra môi trường máy chủ test local
+      - "3001:3000"
+    restart: always
+    depends_on:
+      - backend
+
+volumes:
+  sqlite_data:
