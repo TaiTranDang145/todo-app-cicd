@@ -9,45 +9,66 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Production VPS via SSH
+    name: Deploy to Production VPS
     runs-on: ubuntu-latest
     # Chỉ deploy nếu kết quả của CI workflow trước đó thành công
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      # Sử dụng SSH Action để thực thi lệnh từ xa trên VPS Ubuntu
-      - name: Deploy to VPS via SSH
+      # Bước 1: Kéo mã nguồn từ GitHub về Runner (để lấy file docker-compose.yml mới nhất)
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # Bước 2: Tự động tạo thư mục test trong home directory của VPS nếu chưa tồn tại
+      - name: Pre-create deployment folder
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           port: 22
-          # Kịch bản triển khai ứng dụng trên máy chủ VPS
           script: |
-            # 1. Di chuyển vào thư mục dự án trên VPS
-            cd /app
+            mkdir -p /home/${{ secrets.USERNAME }}/test
 
-            # 2. Lấy Commit SHA từ workflow CI vừa hoàn tất thành công
+      # Bước 3: TỰ ĐỘNG COPY file docker-compose.yml mới nhất từ GitHub sang thư mục test trên VPS
+      - name: Copy docker-compose.yml via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          source: "docker-compose.yml"
+          target: "/home/${{ secrets.USERNAME }}/test"
+          strip_components: 0
+
+      # Bước 4: Thực thi kéo image mới và khởi động lại các Container trên VPS
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script: |
+            cd /home/${{ secrets.USERNAME }}/test
+
+            # Lấy Commit SHA từ workflow CI vừa hoàn tất thành công
             export COMMIT_SHA=${{ github.event.workflow_run.head_sha }}
             echo "Bắt đầu cập nhật hệ thống sang phiên bản: $COMMIT_SHA"
 
-            # 3. Tạo/Cập nhật file .env để docker-compose.yml đọc các biến môi trường
+            # Tạo/Cập nhật file .env để docker-compose.yml đọc các biến môi trường
             echo "TAG=$COMMIT_SHA" > .env
             echo "VITE_API_URL=http://${{ secrets.HOST }}:8000" >> .env
             echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
 
-            # 4. Kéo các Docker Images có tag Commit SHA tương ứng về máy chủ VPS
-            echo "Đang kéo các Docker images mới từ Docker Hub..."
+            # Kéo các Docker Images có tag Commit SHA tương ứng về máy chủ VPS
             docker compose pull
 
-            # 5. Cập nhật và khởi động lại các Container dưới dạng background mode
-            # --remove-orphans tự động dọn dẹp các service cũ bị gỡ bỏ
-            echo "Đang khởi chạy dịch vụ..."
+            # Cập nhật và khởi động lại các Container dưới dạng background mode
             docker compose up -d --remove-orphans
 
-            # 6. Dọn dẹp hệ thống: xóa các Docker image cũ không còn container nào trỏ tới
-            echo "Đang dọn dẹp dung lượng đĩa cứng máy chủ..."
+            # Dọn dẹp dung lượng đĩa cứng máy chủ
             docker image prune -f
 
             echo "Triển khai CD thành công!"
