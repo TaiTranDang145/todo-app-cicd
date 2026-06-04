@@ -9,12 +9,12 @@ const getApiUrl = () => {
     const hostname = window.location.hostname;
     // Nếu là môi trường chạy local
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3895';
+      return 'http://localhost:8005';
     }
-    // Nếu chạy trên VPS, tự động gọi API tới IP VPS ở cổng 3895
-    return `http://${hostname}:3895`;
+    // Nếu chạy trên VPS, tự động gọi API tới IP VPS ở cổng 8005
+    return `http://${hostname}:8005`;
   }
-  return 'http://localhost:3895';
+  return 'http://localhost:8005';
 };
 
 const API_URL = getApiUrl();
