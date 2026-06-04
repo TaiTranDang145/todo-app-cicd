@@ -108,3 +108,38 @@ def test_cors_headers():
     assert response.status_code == 200 or response.status_code == 204
     assert response.headers.get("access-control-allow-origin") == "*"
 
+
+def test_clear_completed():
+    """
+    Kiểm thử API DELETE /todos/completed (Xóa tất cả các công việc đã hoàn thành):
+    1. Tạo 2 công việc (1 hoàn thành, 1 chưa hoàn thành).
+    2. Gọi API DELETE /todos/completed.
+    3. Kiểm tra xem chỉ công việc hoàn thành bị xóa, công việc chưa hoàn thành vẫn còn.
+    """
+    # 1. Tạo công việc đã hoàn thành
+    client.post(
+        "/todos",
+        json={"title": "Task Completed A", "completed": True}
+    )
+    # 2. Tạo công việc chưa hoàn thành
+    client.post(
+        "/todos",
+        json={"title": "Task Pending B", "completed": False}
+    )
+
+    # 3. Gọi API clear completed
+    response = client.delete("/todos/completed")
+    assert response.status_code == 200
+    assert "Cleared" in response.json()["message"]
+
+    # 4. Kiểm tra danh sách còn lại
+    get_resp = client.get("/todos")
+    todos = get_resp.json()
+    titles = [item["title"] for item in todos]
+    
+    # Task Completed A phải biến mất
+    assert "Task Completed A" not in titles
+    # Task Pending B phải vẫn còn
+    assert "Task Pending B" in titles
+
+

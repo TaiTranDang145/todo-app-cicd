@@ -43,6 +43,17 @@ def create_todo(todo: schemas.TodoCreate, db: Session = Depends(get_db)):
     db.refresh(db_todo)
     return db_todo
 
+@app.delete("/todos/completed")
+def clear_completed_todos(db: Session = Depends(get_db)):
+    """
+    Xóa tất cả các Todo đã được đánh dấu là hoàn thành (completed=True).
+    """
+    completed_todos = db.query(models.Todo).filter(models.Todo.completed == True).all()
+    count = len(completed_todos)
+    db.query(models.Todo).filter(models.Todo.completed == True).delete(synchronize_session=False)
+    db.commit()
+    return {"message": f"Cleared {count} completed todos successfully"}
+
 @app.put("/todos/{todo_id}", response_model=schemas.Todo)
 def update_todo(todo_id: int, todo_update: schemas.TodoUpdate, db: Session = Depends(get_db)):
     """

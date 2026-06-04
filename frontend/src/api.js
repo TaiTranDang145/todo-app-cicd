@@ -46,6 +46,11 @@ export const deleteTodo = async (id) => {
   return response.data;
 };
 
+export const clearCompletedTodos = async () => {
+  const response = await api.delete('/todos/completed');
+  return response.data;
+};
+
 export const getHealth = async () => {
   const response = await api.get('/health');
   return response.data;

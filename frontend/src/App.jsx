@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getTodos, createTodo, updateTodo, deleteTodo, getHealth } from './api';
+import { getTodos, createTodo, updateTodo, deleteTodo, getHealth, clearCompletedTodos } from './api';
 
 function App() {
   const [todos, setTodos] = useState([]);
@@ -69,6 +69,19 @@ function App() {
       setTodos(todos.filter(t => t.id !== id));
     } catch (err) {
       console.error("Không thể xóa todo:", err);
+    }
+  };
+
+  const handleClearCompleted = async () => {
+    const completedCount = todos.filter(t => t.completed).length;
+    if (completedCount === 0) return;
+    if (window.confirm(`Bạn có chắc chắn muốn xóa tất cả ${completedCount} công việc đã hoàn thành?`)) {
+      try {
+        await clearCompletedTodos();
+        setTodos(todos.filter(t => !t.completed));
+      } catch (err) {
+        console.error("Không thể xóa các công việc đã hoàn thành:", err);
+      }
     }
   };
 
@@ -182,6 +195,39 @@ function App() {
                     </button>
                   </div>
                 ))}
+                
+                {todos.filter(t => t.completed).length > 0 && (
+                  <div className="clear-completed-container" style={{ display: 'flex', justifyContent: 'center', marginTop: '1.2rem' }}>
+                    <button 
+                      onClick={handleClearCompleted} 
+                      className="btn btn-clear-completed"
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        padding: '0.6rem 1.2rem',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontWeight: '500',
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }}
+                    >
+                      🧹 Xóa công việc đã xong ({todos.filter(t => t.completed).length})
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </section>
