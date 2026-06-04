@@ -59,7 +59,7 @@ jobs:
 
             # Tạo/Cập nhật file .env để docker-compose.yml đọc các biến môi trường
             echo "TAG=$COMMIT_SHA" > .env
-            echo "VITE_API_URL=http://${{ secrets.HOST }}:8005" >> .env
+            echo "VITE_API_URL=http://${{ secrets.HOST }}:3895" >> .env
             echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
 
             # Kéo các Docker Images có tag Commit SHA tương ứng về máy chủ VPS
