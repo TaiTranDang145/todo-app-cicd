@@ -1,9 +1,11 @@
-name: CI
+name: CI/CD Pipeline
 
-# Workflow được kích hoạt khi push code hoặc mở PR vào nhánh main
+# Workflow được kích hoạt khi push/PR vào main, hoặc khi tạo Git Tag mới dạng v1.0.0
 on:
   push:
     branches: [ "main" ]
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches: [ "main" ]
 
@@ -37,13 +39,13 @@ jobs:
         run: |
           pytest backend/
 
-  # Job 2: Biên dịch các Docker images và đẩy lên Docker Hub
+  # Job 2: Biên dịch các Docker images và đẩy lên GHCR (Chỉ chạy khi tạo Tag dạng v1.0.0)
   build-and-push:
     name: Build & Push Docker Images
     needs: test # Job này chỉ chạy khi Job 'test' trước đó kết thúc thành công
     runs-on: ubuntu-latest
-    # Điều kiện bảo vệ: Chỉ build và push khi sự kiện là PUSH code trực tiếp lên nhánh MAIN
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # CHỈ build và push khi sự kiện là push một TAG mới (ví dụ: v1.0.0)
+    if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
       # Bước 1: Kéo mã nguồn từ GitHub về Runner
@@ -73,7 +75,8 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ env.OWNER_LC }}/todo-backend:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LC }}/todo-backend:${{ github.ref_name }}
+            ghcr.io/${{ env.OWNER_LC }}/todo-backend:latest
 
       # Bước 4: Build và đẩy Docker Image của Frontend lên GHCR
       - name: Build and Push Frontend Image
@@ -86,4 +89,91 @@ jobs:
           build-args: |
             VITE_API_URL=http://${{ secrets.HOST }}:8005
           tags: |
-            ghcr.io/${{ env.OWNER_LC }}/todo-frontend:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LC }}/todo-frontend:${{ github.ref_name }}
+            ghcr.io/${{ env.OWNER_LC }}/todo-frontend:latest
+
+      # Bước 5: Tự động tạo Release và Changelog trên GitHub
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 3: Triển khai ứng dụng lên VPS (Chỉ chạy khi build và push tag thành công)
+  deploy:
+    name: Deploy to Production VPS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      # Bước 1: Kéo mã nguồn từ GitHub về Runner (để lấy file docker-compose.yml mới nhất)
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # Bước 2: Tự động tạo thư mục test trong home directory của VPS nếu chưa tồn tại
+      - name: Pre-create deployment folder
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script: |
+            mkdir -p /home/${{ secrets.USERNAME }}/test
+
+      # Bước 3: TỰ ĐỘNG COPY file docker-compose.yml mới nhất sang VPS
+      - name: Copy docker-compose.yml via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          source: "docker-compose.yml"
+          target: "/home/${{ secrets.USERNAME }}/test"
+          strip_components: 0
+
+      # Bước 4: Thực thi đăng nhập GHCR, kéo image mới và khởi động lại các Container trên VPS
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          envs: GITHUB_TOKEN,GITHUB_REPOSITORY_OWNER
+          script: |
+            cd /home/${{ secrets.USERNAME }}/test
+
+            # Lấy tên Tag vừa phát hành làm mã phiên bản deploy
+            export TAG_NAME=${{ github.ref_name }}
+            echo "Bắt đầu cập nhật hệ thống sang phiên bản tag: $TAG_NAME"
+
+            # Đăng nhập vào GitHub Container Registry trên VPS để pull các private images
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u $GITHUB_REPOSITORY_OWNER --password-stdin
+
+            # Tạo/Cập nhật file .env để docker-compose.yml đọc các biến môi trường
+            echo "TAG=$TAG_NAME" > .env
+            echo "VITE_API_URL=http://${{ secrets.HOST }}:8005" >> .env
+            
+            # Chuyển tên tài khoản GitHub (owner) sang dạng viết thường để khớp với Docker Image
+            REPO_OWNER_LC=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+            echo "DOCKER_USERNAME=ghcr.io/$REPO_OWNER_LC" >> .env
+
+            # Kéo các Docker Images có tag tương ứng về máy chủ VPS
+            docker compose pull
+
+            # Cập nhật và khởi động lại các Container dưới dạng background mode
+            docker compose up -d --remove-orphans
+
+            # Đăng xuất để xóa token phiên đăng nhập tạm thời trên VPS
+            docker logout ghcr.io
+
+            # Dọn dẹp dung lượng đĩa cứng máy chủ
+            docker image prune -f
+
+            echo "Triển khai CD thành công sang phiên bản: $TAG_NAME!"
