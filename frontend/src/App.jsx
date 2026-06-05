@@ -3,27 +3,52 @@ import { getTodos, createTodo, updateTodo, deleteTodo, getHealth, clearCompleted
 
 function App() {
   const getIsoDateString = (date) => {
-    return date.toISOString().split('T')[0];
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
   };
-
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-
-  const dateOptions = [
-    { label: 'Hôm qua', value: getIsoDateString(yesterday), display: yesterday.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' }) },
-    { label: 'Hôm nay', value: getIsoDateString(today), display: today.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' }) },
-    { label: 'Ngày mai', value: getIsoDateString(tomorrow), display: tomorrow.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' }) },
-  ];
 
   const [todos, setTodos] = useState([]);
   const [newTodoTitle, setNewTodoTitle] = useState('');
-  const [selectedDate, setSelectedDate] = useState(dateOptions[1].value); // Mặc định là Hôm nay
+  const [selectedDate, setSelectedDate] = useState(getIsoDateString(new Date())); // Mặc định là Hôm nay
   const [apiStatus, setApiStatus] = useState('checking'); // 'online', 'offline', 'checking'
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'pending', 'completed'
+
+  // Hàm chuyển đổi ngày nhanh (tiến/lùi n ngày)
+  const shiftDate = (days) => {
+    const currentParts = selectedDate.split('-');
+    const current = new Date(currentParts[0], currentParts[1] - 1, currentParts[2]);
+    current.setDate(current.getDate() + days);
+    setSelectedDate(getIsoDateString(current));
+  };
+
+  // Hàm định dạng ngày để hiển thị thân thiện trên UI
+  const getDisplayDateLabel = () => {
+    const todayStr = getIsoDateString(new Date());
+    
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = getIsoDateString(yesterday);
+    
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = getIsoDateString(tomorrow);
+
+    if (selectedDate === todayStr) return "Hôm nay";
+    if (selectedDate === yesterdayStr) return "Hôm qua";
+    if (selectedDate === tomorrowStr) return "Ngày mai";
+
+    const dateParts = selectedDate.split('-');
+    const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    return dateObj.toLocaleDateString('vi-VN', { weekday: 'long' });
+  };
+
+  const getDisplayDateValue = () => {
+    const dateParts = selectedDate.split('-');
+    const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    return dateObj.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
 
   useEffect(() => {
     fetchBackendData(selectedDate);
@@ -120,7 +145,7 @@ function App() {
           <img src="https://img.icons8.com/color/96/todo-list.png" alt="Todo Logo" className="header-logo" />
           <h1>VPI Todo Control Hub</h1>
         </div>
-        <p className="app-subtitle">Quản lý công việc cá nhân</p>
+        <p className="app-subtitle">Quản lý công việc theo thời gian qua CI/CD Pipeline v1.0.3 & GitHub Container Registry</p>
       </header>
 
       <main className="app-main">
@@ -141,35 +166,87 @@ function App() {
           <section className="card todo-section">
             <h2>Danh Sách Công Việc</h2>
 
-            {/* Thanh chọn ngày (Hôm qua, Hôm nay, Ngày mai) */}
-            <div className="date-selector" style={{ display: 'flex', justifyContent: 'center', gap: '0.8rem', marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.05)', padding: '0.4rem', borderRadius: '12px' }}>
-              {dateOptions.map(opt => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setSelectedDate(opt.value)}
-                  className={`date-btn ${selectedDate === opt.value ? 'active' : ''}`}
-                  style={{
-                    flex: 1,
-                    padding: '0.6rem 0.8rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: selectedDate === opt.value ? 'linear-gradient(135deg, #a855f7 0%, #14b8a6 100%)' : 'transparent',
-                    color: selectedDate === opt.value ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    fontWeight: selectedDate === opt.value ? '600' : '400',
-                    transition: 'all 0.3s ease',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '0.2rem',
-                  }}
-                >
-                  <span style={{ fontSize: '0.75rem', opacity: 0.8, textTransform: 'uppercase' }}>{opt.label}</span>
-                  <span>{opt.display}</span>
-                </button>
-              ))}
+            {/* Bộ chọn ngày thông minh (Datepicker + Tiến/Lùi 1 ngày) */}
+            <div className="calendar-selector" style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              gap: '1rem', 
+              marginBottom: '1.5rem',
+              background: 'rgba(255, 255, 255, 0.05)',
+              padding: '0.6rem 1rem',
+              borderRadius: '12px',
+              border: '1px solid rgba(255, 255, 255, 0.08)'
+            }}>
+              <button 
+                type="button" 
+                onClick={() => shiftDate(-1)}
+                className="btn-date-nav"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  color: '#fff',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background 0.2s',
+                }}
+              >
+                ◀
+              </button>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.1rem', flex: 1, position: 'relative' }}>
+                <span style={{ fontSize: '0.75rem', color: '#14b8a6', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {getDisplayDateLabel()}
+                </span>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <input 
+                    type="date" 
+                    value={selectedDate} 
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#ffffff',
+                      fontSize: '1rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      outline: 'none',
+                      fontFamily: 'inherit',
+                      colorScheme: 'dark'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="button" 
+                onClick={() => shiftDate(1)}
+                className="btn-date-nav"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  color: '#fff',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background 0.2s',
+                }}
+              >
+                ▶
+              </button>
             </div>
             
             {/* Form thêm Todo mới */}
