@@ -18,6 +18,13 @@ try:
 except Exception:
     pass
 
+# Tự động cập nhật thêm cột category nếu cơ sở dữ liệu cũ chưa có
+try:
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE todos ADD COLUMN category VARCHAR"))
+except Exception:
+    pass
+
 app = FastAPI(title="Todo Application API")
 
 app.add_middleware(
@@ -36,13 +43,15 @@ def health_check():
     return {"status": "ok"}
 
 @app.get("/todos", response_model=list[schemas.Todo])
-def get_todos(date: Optional[str] = None, db: Session = Depends(get_db)):
+def get_todos(date: Optional[str] = None, category: Optional[str] = None, db: Session = Depends(get_db)):
     """
-    Lấy danh sách các Todo, có thể lọc theo ngày (định dạng YYYY-MM-DD).
+    Lấy danh sách các Todo, có thể lọc theo ngày (YYYY-MM-DD) và danh mục (category).
     """
     query = db.query(models.Todo)
     if date:
         query = query.filter(models.Todo.date == date)
+    if category:
+        query = query.filter(models.Todo.category == category)
     return query.all()
 
 @app.post("/todos", response_model=schemas.Todo, status_code=201)
@@ -51,10 +60,12 @@ def create_todo(todo: schemas.TodoCreate, db: Session = Depends(get_db)):
     Tạo một Todo mới.
     """
     todo_date = todo.date or datetime.date.today().isoformat()
+    todo_category = todo.category or "Cá nhân"
     db_todo = models.Todo(
         title=todo.title, 
         completed=todo.completed, 
-        date=todo_date
+        date=todo_date,
+        category=todo_category
     )
     db.add(db_todo)
     db.commit()
@@ -87,6 +98,8 @@ def update_todo(todo_id: int, todo_update: schemas.TodoUpdate, db: Session = Dep
         db_todo.completed = todo_update.completed
     if todo_update.date is not None:
         db_todo.date = todo_update.date
+    if todo_update.category is not None:
+        db_todo.category = todo_update.category
         
     db.commit()
     db.refresh(db_todo)

@@ -183,4 +183,41 @@ def test_get_todos_by_date():
     assert "Task Today" not in titles_tomorrow
 
 
+def test_get_todos_by_category():
+    """
+    Kiểm thử lọc Todo theo danh mục (category):
+    1. Tạo 1 todo thuộc danh mục "Công việc".
+    2. Tạo 1 todo thuộc danh mục "Học tập".
+    3. Lọc danh sách theo danh mục "Công việc" -> chỉ chứa todo "Công việc".
+    4. Lọc danh sách theo danh mục "Học tập" -> chỉ chứa todo "Học tập".
+    """
+    # Tạo todo "Công việc"
+    client.post(
+        "/todos",
+        json={"title": "Họp dự án", "completed": False, "category": "Công việc"}
+    )
+    # Tạo todo "Học tập"
+    client.post(
+        "/todos",
+        json={"title": "Học Docker", "completed": False, "category": "Học tập"}
+    )
+
+    # Lọc "Công việc"
+    resp_work = client.get("/todos?category=Công việc")
+    assert resp_work.status_code == 200
+    todos_work = resp_work.json()
+    titles_work = [t["title"] for t in todos_work]
+    assert "Họp dự án" in titles_work
+    assert "Học Docker" not in titles_work
+
+    # Lọc "Học tập"
+    resp_study = client.get("/todos?category=Học tập")
+    assert resp_study.status_code == 200
+    todos_study = resp_study.json()
+    titles_study = [t["title"] for t in todos_study]
+    assert "Học Docker" in titles_study
+    assert "Họp dự án" not in titles_study
+
+
+
 
