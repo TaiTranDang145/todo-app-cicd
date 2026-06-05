@@ -103,7 +103,7 @@ function App() {
           <img src="https://img.icons8.com/color/96/todo-list.png" alt="Todo Logo" className="header-logo" />
           <h1>VPI Todo Control Hub</h1>
         </div>
-        <p className="app-subtitle">Quản lý công việc hiệu quả trên nền tảng Docker & CI/CD Pipeline tự động</p>
+        <p className="app-subtitle">Quản lý công việc tự động qua CI/CD Pipeline v1.0.1 & GitHub Container Registry</p>
       </header>
 
       <main className="app-main">
