@@ -13,7 +13,7 @@ services:
     restart: always
     volumes:
       # Mount volume để lưu trữ SQLite database file todo.db không bị mất khi restart container
-      - sqlite_data:/app
+      - sqlite_data:/app/data
     environment:
       - ENV=production
 
