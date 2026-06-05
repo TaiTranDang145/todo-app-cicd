@@ -1,9 +1,11 @@
-name: CI
+name: CI Pipeline
 
-# Workflow được kích hoạt khi push code hoặc mở PR vào nhánh main
+# Workflow được kích hoạt khi push/PR vào main, hoặc khi tạo Git Tag mới dạng v1.0.0
 on:
   push:
     branches: [ "main" ]
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches: [ "main" ]
 
@@ -37,13 +39,13 @@ jobs:
         run: |
           pytest backend/
 
-  # Job 2: Biên dịch các Docker images và đẩy lên Docker Hub
+  # Job 2: Biên dịch các Docker images và đẩy lên GHCR (Chỉ chạy khi tạo Tag dạng v1.0.0)
   build-and-push:
     name: Build & Push Docker Images
     needs: test # Job này chỉ chạy khi Job 'test' trước đó kết thúc thành công
     runs-on: ubuntu-latest
-    # Điều kiện bảo vệ: Chỉ build và push khi sự kiện là PUSH code trực tiếp lên nhánh MAIN
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # CHỈ build và push khi sự kiện là push một TAG mới (ví dụ: v1.0.0)
+    if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
       # Bước 1: Kéo mã nguồn từ GitHub về Runner
@@ -73,7 +75,8 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ env.OWNER_LC }}/todo-backend:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LC }}/todo-backend:${{ github.ref_name }}
+            ghcr.io/${{ env.OWNER_LC }}/todo-backend:latest
 
       # Bước 4: Build và đẩy Docker Image của Frontend lên GHCR
       - name: Build and Push Frontend Image
@@ -86,4 +89,13 @@ jobs:
           build-args: |
             VITE_API_URL=http://${{ secrets.HOST }}:8005
           tags: |
-            ghcr.io/${{ env.OWNER_LC }}/todo-frontend:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LC }}/todo-frontend:${{ github.ref_name }}
+            ghcr.io/${{ env.OWNER_LC }}/todo-frontend:latest
+
+      # Bước 5: Tự động tạo Release và Changelog trên GitHub
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

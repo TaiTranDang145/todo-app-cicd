@@ -1,9 +1,9 @@
-name: CD
+name: CD Pipeline
 
 # Kích hoạt tự động sau khi workflow CI hoàn thành
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["CI Pipeline"]
     types:
       - completed
 
@@ -11,8 +11,8 @@ jobs:
   deploy:
     name: Deploy to Production VPS
     runs-on: ubuntu-latest
-    # Chỉ deploy nếu kết quả của CI workflow trước đó thành công
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Chỉ deploy nếu kết quả của CI trước đó thành công VÀ được kích hoạt từ một Tag (bắt đầu bằng chữ v)
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
 
     steps:
       # Bước 1: Kéo mã nguồn từ GitHub về Runner (để lấy file docker-compose.yml mới nhất)
@@ -30,7 +30,7 @@ jobs:
           script: |
             mkdir -p /home/${{ secrets.USERNAME }}/test
 
-      # Bước 3: TỰ ĐỘNG COPY file docker-compose.yml mới nhất từ GitHub sang thư mục test trên VPS
+      # Bước 3: TỰ ĐỘNG COPY file docker-compose.yml mới nhất sang VPS
       - name: Copy docker-compose.yml via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -56,22 +56,23 @@ jobs:
           script: |
             cd /home/${{ secrets.USERNAME }}/test
 
-            # Lấy Commit SHA từ workflow CI vừa hoàn tất thành công
-            export COMMIT_SHA=${{ github.event.workflow_run.head_sha }}
-            echo "Bắt đầu cập nhật hệ thống sang phiên bản: $COMMIT_SHA"
+            # Lấy tên Tag vừa phát hành làm mã phiên bản deploy (loại bỏ tiền tố refs/tags/ nếu có)
+            export RAW_TAG=${{ github.event.workflow_run.head_branch }}
+            export TAG_NAME=$(echo "$RAW_TAG" | sed 's|refs/tags/||')
+            echo "Bắt đầu cập nhật hệ thống sang phiên bản tag: $TAG_NAME"
 
             # Đăng nhập vào GitHub Container Registry trên VPS để pull các private images
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u $GITHUB_REPOSITORY_OWNER --password-stdin
 
             # Tạo/Cập nhật file .env để docker-compose.yml đọc các biến môi trường
-            echo "TAG=$COMMIT_SHA" > .env
+            echo "TAG=$TAG_NAME" > .env
             echo "VITE_API_URL=http://${{ secrets.HOST }}:8005" >> .env
             
             # Chuyển tên tài khoản GitHub (owner) sang dạng viết thường để khớp với Docker Image
             REPO_OWNER_LC=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
             echo "DOCKER_USERNAME=ghcr.io/$REPO_OWNER_LC" >> .env
 
-            # Kéo các Docker Images có tag Commit SHA tương ứng về máy chủ VPS
+            # Kéo các Docker Images có tag tương ứng về máy chủ VPS
             docker compose pull
 
             # Cập nhật và khởi động lại các Container dưới dạng background mode
@@ -83,4 +84,4 @@ jobs:
             # Dọn dẹp dung lượng đĩa cứng máy chủ
             docker image prune -f
 
-            echo "Triển khai CD thành công!"
+            echo "Triển khai CD thành công sang phiên bản: $TAG_NAME!"
