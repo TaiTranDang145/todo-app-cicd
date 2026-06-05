@@ -1,8 +1,10 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class TodoBase(BaseModel):
     title: str
     completed: bool = False
+    date: Optional[str] = None
 
 class TodoCreate(TodoBase):
     """
@@ -14,8 +16,9 @@ class TodoUpdate(BaseModel):
     """
     Schema nhận dữ liệu khi cập nhật Todo. Các trường là tùy chọn (optional).
     """
-    title: str | None = None
-    completed: bool | None = None
+    title: Optional[str] = None
+    completed: Optional[bool] = None
+    date: Optional[str] = None
 
 class Todo(TodoBase):
     """
@@ -25,3 +28,4 @@ class Todo(TodoBase):
 
     class Config:
         from_attributes = True
+

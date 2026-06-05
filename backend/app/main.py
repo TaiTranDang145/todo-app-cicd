@@ -1,12 +1,22 @@
+import datetime
+from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app import models
+from sqlalchemy import text
 from app import schemas
 from app.database import engine, get_db
 
 # Khởi tạo toàn bộ bảng cơ sở dữ liệu nếu chưa tồn tại
 models.Base.metadata.create_all(bind=engine)
+
+# Tự động cập nhật thêm cột date nếu cơ sở dữ liệu cũ chưa có (Tránh lỗi trên Production)
+try:
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE todos ADD COLUMN date VARCHAR"))
+except Exception:
+    pass
 
 app = FastAPI(title="Todo Application API")
 
@@ -26,18 +36,26 @@ def health_check():
     return {"status": "ok"}
 
 @app.get("/todos", response_model=list[schemas.Todo])
-def get_todos(db: Session = Depends(get_db)):
+def get_todos(date: Optional[str] = None, db: Session = Depends(get_db)):
     """
-    Lấy danh sách toàn bộ các Todo.
+    Lấy danh sách các Todo, có thể lọc theo ngày (định dạng YYYY-MM-DD).
     """
-    return db.query(models.Todo).all()
+    query = db.query(models.Todo)
+    if date:
+        query = query.filter(models.Todo.date == date)
+    return query.all()
 
 @app.post("/todos", response_model=schemas.Todo, status_code=201)
 def create_todo(todo: schemas.TodoCreate, db: Session = Depends(get_db)):
     """
     Tạo một Todo mới.
     """
-    db_todo = models.Todo(title=todo.title, completed=todo.completed)
+    todo_date = todo.date or datetime.date.today().isoformat()
+    db_todo = models.Todo(
+        title=todo.title, 
+        completed=todo.completed, 
+        date=todo_date
+    )
     db.add(db_todo)
     db.commit()
     db.refresh(db_todo)
@@ -57,7 +75,7 @@ def clear_completed_todos(db: Session = Depends(get_db)):
 @app.put("/todos/{todo_id}", response_model=schemas.Todo)
 def update_todo(todo_id: int, todo_update: schemas.TodoUpdate, db: Session = Depends(get_db)):
     """
-    Cập nhật thông tin (tiêu đề hoặc trạng thái hoàn thành) của một Todo.
+    Cập nhật thông tin (tiêu đề, trạng thái hoặc ngày) của một Todo.
     """
     db_todo = db.query(models.Todo).filter(models.Todo.id == todo_id).first()
     if not db_todo:
@@ -67,6 +85,8 @@ def update_todo(todo_id: int, todo_update: schemas.TodoUpdate, db: Session = Dep
         db_todo.title = todo_update.title
     if todo_update.completed is not None:
         db_todo.completed = todo_update.completed
+    if todo_update.date is not None:
+        db_todo.date = todo_update.date
         
     db.commit()
     db.refresh(db_todo)

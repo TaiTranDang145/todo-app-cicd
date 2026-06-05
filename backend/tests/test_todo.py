@@ -1,5 +1,6 @@
 import sys
 import os
+import datetime
 # Append thư mục backend vào sys.path để import được module app
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -141,5 +142,45 @@ def test_clear_completed():
     assert "Task Completed A" not in titles
     # Task Pending B phải vẫn còn
     assert "Task Pending B" in titles
+
+
+def test_get_todos_by_date():
+    """
+    Kiểm thử lọc Todo theo ngày:
+    1. Tạo 1 todo cho ngày hôm nay.
+    2. Tạo 1 todo cho ngày mai.
+    3. Lọc danh sách theo ngày hôm nay -> chỉ chứa todo ngày hôm nay.
+    4. Lọc danh sách theo ngày mai -> chỉ chứa todo ngày mai.
+    """
+    today_str = datetime.date.today().isoformat()
+    tomorrow_str = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+
+    # Tạo todo hôm nay
+    client.post(
+        "/todos",
+        json={"title": "Task Today", "completed": False, "date": today_str}
+    )
+    # Tạo todo ngày mai
+    client.post(
+        "/todos",
+        json={"title": "Task Tomorrow", "completed": False, "date": tomorrow_str}
+    )
+
+    # Lọc hôm nay
+    resp_today = client.get(f"/todos?date={today_str}")
+    assert resp_today.status_code == 200
+    todos_today = resp_today.json()
+    titles_today = [t["title"] for t in todos_today]
+    assert "Task Today" in titles_today
+    assert "Task Tomorrow" not in titles_today
+
+    # Lọc ngày mai
+    resp_tomorrow = client.get(f"/todos?date={tomorrow_str}")
+    assert resp_tomorrow.status_code == 200
+    todos_tomorrow = resp_tomorrow.json()
+    titles_tomorrow = [t["title"] for t in todos_tomorrow]
+    assert "Task Tomorrow" in titles_tomorrow
+    assert "Task Today" not in titles_tomorrow
+
 
 
