@@ -26,13 +26,15 @@ const api = axios.create({
   },
 });
 
-export const getTodos = async () => {
-  const response = await api.get('/todos');
+export const getTodos = async (date) => {
+  const response = await api.get('/todos', {
+    params: date ? { date } : {}
+  });
   return response.data;
 };
 
-export const createTodo = async (title) => {
-  const response = await api.post('/todos', { title, completed: false });
+export const createTodo = async (title, date) => {
+  const response = await api.post('/todos', { title, completed: false, date });
   return response.data;
 };
 

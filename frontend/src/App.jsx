@@ -2,17 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { getTodos, createTodo, updateTodo, deleteTodo, getHealth, clearCompletedTodos } from './api';
 
 function App() {
+  const getIsoDateString = (date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  const dateOptions = [
+    { label: 'Hôm qua', value: getIsoDateString(yesterday), display: yesterday.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' }) },
+    { label: 'Hôm nay', value: getIsoDateString(today), display: today.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' }) },
+    { label: 'Ngày mai', value: getIsoDateString(tomorrow), display: tomorrow.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' }) },
+  ];
+
   const [todos, setTodos] = useState([]);
   const [newTodoTitle, setNewTodoTitle] = useState('');
+  const [selectedDate, setSelectedDate] = useState(dateOptions[1].value); // Mặc định là Hôm nay
   const [apiStatus, setApiStatus] = useState('checking'); // 'online', 'offline', 'checking'
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'pending', 'completed'
 
   useEffect(() => {
-    fetchBackendData();
+    fetchBackendData(selectedDate);
     const interval = setInterval(checkHealth, 8000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedDate]);
 
   const checkHealth = async () => {
     try {
@@ -27,11 +44,11 @@ function App() {
     }
   };
 
-  const fetchBackendData = async () => {
+  const fetchBackendData = async (date) => {
     setLoading(true);
     try {
       await checkHealth();
-      const data = await getTodos();
+      const data = await getTodos(date);
       setTodos(data);
     } catch (err) {
       console.error("Lỗi khi tải danh sách todo:", err);
@@ -46,7 +63,7 @@ function App() {
     if (!newTodoTitle.trim()) return;
 
     try {
-      const created = await createTodo(newTodoTitle);
+      const created = await createTodo(newTodoTitle, selectedDate);
       setTodos([...todos, created]);
       setNewTodoTitle('');
     } catch (err) {
@@ -103,7 +120,7 @@ function App() {
           <img src="https://img.icons8.com/color/96/todo-list.png" alt="Todo Logo" className="header-logo" />
           <h1>VPI Todo Control Hub</h1>
         </div>
-        <p className="app-subtitle">Quản lý công việc tự động qua CI/CD Pipeline v1.0.1 & GitHub Container Registry</p>
+        <p className="app-subtitle">Quản lý công việc cá nhân</p>
       </header>
 
       <main className="app-main">
@@ -123,6 +140,37 @@ function App() {
           {/* Todo App Card */}
           <section className="card todo-section">
             <h2>Danh Sách Công Việc</h2>
+
+            {/* Thanh chọn ngày (Hôm qua, Hôm nay, Ngày mai) */}
+            <div className="date-selector" style={{ display: 'flex', justifyContent: 'center', gap: '0.8rem', marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.05)', padding: '0.4rem', borderRadius: '12px' }}>
+              {dateOptions.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setSelectedDate(opt.value)}
+                  className={`date-btn ${selectedDate === opt.value ? 'active' : ''}`}
+                  style={{
+                    flex: 1,
+                    padding: '0.6rem 0.8rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: selectedDate === opt.value ? 'linear-gradient(135deg, #a855f7 0%, #14b8a6 100%)' : 'transparent',
+                    color: selectedDate === opt.value ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    fontWeight: selectedDate === opt.value ? '600' : '400',
+                    transition: 'all 0.3s ease',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '0.2rem',
+                  }}
+                >
+                  <span style={{ fontSize: '0.75rem', opacity: 0.8, textTransform: 'uppercase' }}>{opt.label}</span>
+                  <span>{opt.display}</span>
+                </button>
+              ))}
+            </div>
             
             {/* Form thêm Todo mới */}
             <form onSubmit={handleAddTodo} className="todo-form">
