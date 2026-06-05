@@ -5,6 +5,7 @@ class TodoBase(BaseModel):
     title: str
     completed: bool = False
     date: Optional[str] = None
+    category: Optional[str] = "Cá nhân"
 
 class TodoCreate(TodoBase):
     """
@@ -19,6 +20,7 @@ class TodoUpdate(BaseModel):
     title: Optional[str] = None
     completed: Optional[bool] = None
     date: Optional[str] = None
+    category: Optional[str] = None
 
 class Todo(TodoBase):
     """
