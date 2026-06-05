@@ -12,4 +12,5 @@ class Todo(Base):
     title = Column(String, index=True, nullable=False)
     completed = Column(Boolean, default=False)
     date = Column(String, index=True, default=lambda: datetime.date.today().isoformat())
+    category = Column(String, index=True, default="Cá nhân")
 

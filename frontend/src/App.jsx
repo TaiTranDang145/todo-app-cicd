@@ -8,8 +8,18 @@ function App() {
     return localDate.toISOString().split('T')[0];
   };
 
+  const CATEGORIES = ['Cá nhân', 'Công việc', 'Học tập', 'Khác'];
+  const CATEGORY_COLORS = {
+    'Cá nhân': '#a855f7', // Tím
+    'Công việc': '#3b82f6', // Xanh dương
+    'Học tập': '#eab308', // Vàng
+    'Khác': '#6b7280' // Xám
+  };
+
   const [todos, setTodos] = useState([]);
   const [newTodoTitle, setNewTodoTitle] = useState('');
+  const [newTodoCategory, setNewTodoCategory] = useState('Cá nhân');
+  const [filterCategory, setFilterCategory] = useState('Tất cả');
   const [selectedDate, setSelectedDate] = useState(getIsoDateString(new Date())); // Mặc định là Hôm nay
   const [apiStatus, setApiStatus] = useState('checking'); // 'online', 'offline', 'checking'
   const [loading, setLoading] = useState(false);
@@ -51,10 +61,10 @@ function App() {
   };
 
   useEffect(() => {
-    fetchBackendData(selectedDate);
+    fetchBackendData(selectedDate, filterCategory);
     const interval = setInterval(checkHealth, 8000);
     return () => clearInterval(interval);
-  }, [selectedDate]);
+  }, [selectedDate, filterCategory]);
 
   const checkHealth = async () => {
     try {
@@ -69,11 +79,12 @@ function App() {
     }
   };
 
-  const fetchBackendData = async (date) => {
+  const fetchBackendData = async (date, category) => {
     setLoading(true);
     try {
       await checkHealth();
-      const data = await getTodos(date);
+      const apiCategory = category && category !== 'Tất cả' ? category : undefined;
+      const data = await getTodos(date, apiCategory);
       setTodos(data);
     } catch (err) {
       console.error("Lỗi khi tải danh sách todo:", err);
@@ -88,7 +99,7 @@ function App() {
     if (!newTodoTitle.trim()) return;
 
     try {
-      const created = await createTodo(newTodoTitle, selectedDate);
+      const created = await createTodo(newTodoTitle, selectedDate, newTodoCategory);
       setTodos([...todos, created]);
       setNewTodoTitle('');
     } catch (err) {
@@ -250,7 +261,7 @@ function App() {
             </div>
             
             {/* Form thêm Todo mới */}
-            <form onSubmit={handleAddTodo} className="todo-form">
+            <form onSubmit={handleAddTodo} className="todo-form" style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
               <input
                 type="text"
                 placeholder="Nhập công việc mới cần làm..."
@@ -258,18 +269,44 @@ function App() {
                 onChange={(e) => setNewTodoTitle(e.target.value)}
                 disabled={apiStatus === 'offline'}
                 className="todo-input"
+                style={{ flex: 3, minWidth: '200px' }}
               />
+              <select
+                value={newTodoCategory}
+                onChange={(e) => setNewTodoCategory(e.target.value)}
+                disabled={apiStatus === 'offline'}
+                style={{
+                  flex: 1,
+                  minWidth: '120px',
+                  padding: '0.8rem',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: '#ffffff',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  fontWeight: '500'
+                }}
+              >
+                {CATEGORIES.map(cat => (
+                  <option key={cat} value={cat} style={{ background: '#1e1b4b', color: '#fff' }}>
+                    📁 {cat}
+                  </option>
+                ))}
+              </select>
               <button 
                 type="submit" 
                 disabled={apiStatus === 'offline' || !newTodoTitle.trim()} 
                 className="btn btn-add"
+                style={{ flex: 'none', minWidth: '110px' }}
               >
                 Thêm Mới
               </button>
             </form>
 
-            {/* Filter Tabs */}
-            <div className="filter-tabs">
+            {/* Lọc theo Trạng thái (Tất cả, Chưa làm, Đã xong) */}
+            <div className="filter-tabs" style={{ marginBottom: '1rem' }}>
               <button 
                 onClick={() => setActiveTab('all')} 
                 className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
@@ -290,6 +327,49 @@ function App() {
               </button>
             </div>
 
+            {/* Lọc theo Danh mục công việc */}
+            <div className="category-filters" style={{ 
+              display: 'flex', 
+              gap: '0.5rem', 
+              flexWrap: 'wrap', 
+              marginBottom: '1.5rem', 
+              justifyContent: 'center',
+              background: 'rgba(255, 255, 255, 0.03)',
+              padding: '0.5rem',
+              borderRadius: '10px',
+              border: '1px solid rgba(255, 255, 255, 0.05)'
+            }}>
+              {['Tất cả', ...CATEGORIES].map(cat => {
+                const isSelected = filterCategory === cat;
+                const color = cat === 'Tất cả' ? '#14b8a6' : CATEGORY_COLORS[cat];
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setFilterCategory(cat)}
+                    style={{
+                      background: isSelected ? color : 'rgba(255, 255, 255, 0.05)',
+                      color: isSelected ? '#fff' : 'rgba(255, 255, 255, 0.6)',
+                      border: 'none',
+                      borderRadius: '20px',
+                      padding: '0.4rem 0.8rem',
+                      fontSize: '0.8rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      boxShadow: isSelected ? `0 0 10px ${color}4d` : 'none'
+                    }}
+                  >
+                    <span>{cat === 'Tất cả' ? '🌍' : '📁'}</span>
+                    <span>{cat}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Danh sách items */}
             {loading ? (
               <div className="loading-spinner">Đang tải dữ liệu...</div>
@@ -305,11 +385,29 @@ function App() {
                     <div 
                       onClick={() => handleToggleComplete(todo)} 
                       className="todo-item-click-area"
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1 }}
                     >
                       <div className="checkbox-outer">
                         {todo.completed && <span className="checkbox-inner">✓</span>}
                       </div>
-                      <span className="todo-title-text">{todo.title}</span>
+                      <span className="todo-title-text" style={{ flex: 1 }}>{todo.title}</span>
+                      
+                      {/* Badge Danh mục */}
+                      {todo.category && (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          fontWeight: '700',
+                          color: '#ffffff',
+                          background: CATEGORY_COLORS[todo.category] || '#6b7280',
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '6px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.02em',
+                          flexShrink: 0,
+                        }}>
+                          {todo.category}
+                        </span>
+                      )}
                     </div>
                     <button 
                       onClick={() => handleDeleteTodo(todo.id)} 
